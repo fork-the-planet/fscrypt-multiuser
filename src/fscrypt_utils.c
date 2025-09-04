@@ -106,12 +106,12 @@ char *fscrypt_utils_trim(char *str)
 size_t fscrypt_utils_string_to_bytes(unsigned char *outbuf, size_t bufsize, const char *in_string)
 {
     size_t inlength = strlen(in_string);
-    if (bufsize < inlength / 2)
+    if (bufsize < (inlength / 2))
     {
         fscrypt_utils_log(LOG_ERR, "in_string too large for output buffer. Length=%lu, bufsize=%lu\n", inlength, bufsize);
         return 0;
     }
-    if (inlength % 2 != 0)
+    if ((inlength % 2) != 0)
     {
         fscrypt_utils_log(LOG_ERR, "in_string has an odd number of characters\n", in_string);
         return 0;
