@@ -42,8 +42,6 @@ static int g_function_nest_depth = 0;
 #define ENTER_FUNCTION() fscrypt_utils_log(LOG_DEBUG, "%.*sEnter %s\n", g_function_nest_depth++, "------------------------", __func__)
 #define EXIT_FUNCTION() fscrypt_utils_log(LOG_DEBUG, "%.*sExit %s on line %d\n", --g_function_nest_depth, "------------------------", __func__, __LINE__)
 
-const char GLOBAL_DATA_LOCK[] = BUILD_RUNSTATEDIR "/fscrypt-multiuser.lock";
-
 struct fscrypt_util_config_t *g_config = NULL;
 char *g_conf_buffer = NULL;
 
@@ -79,7 +77,7 @@ struct stored_crypto_data_t *read_stored_data(const char *cryptdata_path);
 struct stored_user_data_t *locate_matching_user(struct stored_crypto_data_t *buffer, struct user_key_data_t *user_data);
 int openssl_print_error(const char *str, size_t len, void *userdata);
 
-enum fscrypt_utils_status_t lock_unlock_data_file(int lock);
+enum fscrypt_utils_status_t lock_unlock_data_file(const char *datapath, int lock);
 
 
 char *fscrypt_utils_trim(char *str);
@@ -349,11 +347,16 @@ const char *fscrypt_utils_get_cryptdata_path(const char *mountpoint)
 }
 
 
-enum fscrypt_utils_status_t lock_unlock_data_file(int lock)
+enum fscrypt_utils_status_t lock_unlock_data_file(const char *datapath, int lock)
 {
     ENTER_FUNCTION();
 
-    const char *lock_path = GLOBAL_DATA_LOCK;
+    const char LOCK_FILE_SUFFIX[] = ".lock";
+    size_t lock_path_length = strlen(datapath) + sizeof(LOCK_FILE_SUFFIX) + 1;
+    char *lock_path = calloc(lock_path_length, 1);
+    strncat(lock_path, datapath, lock_path_length - 1);
+    strncat(lock_path, LOCK_FILE_SUFFIX, lock_path_length - strlen(lock_path) - 1);
+    fscrypt_utils_log(LOG_INFO, "%s lockfile %s\n", (lock ? "Creating" : "Removing"), lock_path);
 
     int MAX_RETIRES = 10;
     int retries = 0;
@@ -383,7 +386,7 @@ enum fscrypt_utils_status_t lock_unlock_data_file(int lock)
             if (bytes_read)
             {
                 locked_pid = atoi(read_buf);
-                fscrypt_utils_log(LOG_INFO, "fscrypt database is locked by %d\n", locked_pid);
+                fscrypt_utils_log(LOG_INFO, "fscrypt database is locked by PID %d\n", locked_pid);
             }
             else
             {
@@ -401,14 +404,14 @@ enum fscrypt_utils_status_t lock_unlock_data_file(int lock)
             }
             if (locked_pid != -1)
             {
-                fscrypt_utils_log(LOG_ERR, "%s Data file is LOCKED by pid %d\n", lock_path, locked_pid);
+                fscrypt_utils_log(LOG_WARNING, "%s Data file is LOCKED by pid %d\n", lock_path, locked_pid);
                 continue;
             }
 
             int fd_create = open(lock_path, O_WRONLY | O_CREAT | O_EXCL, 0);
             if (fd_create < 0)
             {
-                fscrypt_utils_log(LOG_ERR, "%s Failed to open for writing\n", lock_path);
+                fscrypt_utils_log(LOG_ERR, "%s Failed to open for writing errno=%d\n", lock_path, errno);
                 continue;
             }
             fchmod(fd_create, 0666);
@@ -439,6 +442,11 @@ enum fscrypt_utils_status_t lock_unlock_data_file(int lock)
         result = FSCRYPT_UTILS_STATUS_OK;
         break;
     } while (retries-- > 0);
+
+    if (result != FSCRYPT_UTILS_STATUS_OK)
+    {
+        fscrypt_utils_log(LOG_ERR, "Database lock operation failed\n");
+    }
 
     EXIT_FUNCTION();
     return result;
@@ -627,7 +635,7 @@ enum fscrypt_utils_status_t wrap_fscrypt_key(struct user_key_data_t *known_user,
     struct stored_crypto_data_t *data_buffer = NULL;
     struct stored_user_data_t *entry_buffer = NULL;
 
-    if (FSCRYPT_UTILS_STATUS_OK != lock_unlock_data_file(1))
+    if (FSCRYPT_UTILS_STATUS_OK != lock_unlock_data_file(cryptdata_path, 1))
     {
         secure_free(&context, sizeof(*context));
         EXIT_FUNCTION(); return FSCRYPT_UTILS_STATUS_ERROR;
@@ -671,7 +679,7 @@ enum fscrypt_utils_status_t wrap_fscrypt_key(struct user_key_data_t *known_user,
     {
         fscrypt_utils_log(LOG_ERR, "Failed to create/get data buffer\n");
         secure_free(&context, sizeof(*context));
-        lock_unlock_data_file(0);
+        lock_unlock_data_file(cryptdata_path, 0);
         EXIT_FUNCTION(); return FSCRYPT_UTILS_STATUS_ERROR;
     }
 
@@ -689,7 +697,7 @@ enum fscrypt_utils_status_t wrap_fscrypt_key(struct user_key_data_t *known_user,
     FILE *fd = fopen(cryptdata_path, "w");
     if (fd == NULL) {
         fscrypt_utils_log(LOG_ERR, "Failed to open for writing %s\n", cryptdata_path);
-        lock_unlock_data_file(0);
+        lock_unlock_data_file(cryptdata_path, 0);
         EXIT_FUNCTION(); return FSCRYPT_UTILS_STATUS_ERROR;
     }
     size_t data_size = STORED_HEADER_SIZE + STORED_ENTRY_SIZE * data_buffer->size;
@@ -698,7 +706,7 @@ enum fscrypt_utils_status_t wrap_fscrypt_key(struct user_key_data_t *known_user,
 
     free(data_buffer);
 
-    lock_unlock_data_file(0);
+    lock_unlock_data_file(cryptdata_path, 0);
 
     if (bytes_written != data_size)
     {
@@ -804,13 +812,13 @@ struct stored_user_data_t *locate_matching_user(struct stored_crypto_data_t *buf
 size_t get_fscrypt_key(uint8_t fscrypt_key_out[FSCRYPT_KEY_BYTES], struct user_key_data_t *user_data, const char *cryptdata_path)
 {
     ENTER_FUNCTION();
-    if (FSCRYPT_UTILS_STATUS_OK != lock_unlock_data_file(1))
+    if (FSCRYPT_UTILS_STATUS_OK != lock_unlock_data_file(cryptdata_path, 1))
     {
         EXIT_FUNCTION(); return 0;
     }
 
     struct stored_crypto_data_t *data_buffer = read_stored_data(cryptdata_path);
-    lock_unlock_data_file(0);
+    lock_unlock_data_file(cryptdata_path, 0);
     if (data_buffer == NULL)
     {
         EXIT_FUNCTION(); return 0;

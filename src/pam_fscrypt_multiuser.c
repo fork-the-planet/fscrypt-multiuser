@@ -136,7 +136,7 @@ int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **ar
 
     if (config->pam_post_hook_arg != NULL)
     {
-        fscrypt_utils_log(LOG_DEBUG, "Starting post-hook execution %s\n", config->pam_post_hook_exec);
+        fscrypt_utils_log(LOG_INFO, "Starting post-hook execution %s\n", config->pam_post_hook_exec);
         void *handle = dlopen(config->pam_post_hook_exec, RTLD_NOW);
         if (handle == NULL)
         {
@@ -160,7 +160,7 @@ int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **ar
                 hook_params.user_kek_data = userdata.user_kek;
                 hook_params.user_kek_bytes = FSCRYPT_USER_KEK_BYTES;
                 hook_function(&hook_params);
-                fscrypt_utils_log(LOG_DEBUG, "post-hook execution completed\n");
+                fscrypt_utils_log(LOG_INFO, "post-hook execution completed\n");
             }
             dlclose(handle);
         }
@@ -204,7 +204,7 @@ int pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const char **argv)
         fscrypt_utils_log(LOG_ERR, "pam_sm_chauthtok failed to get new password\n");
         return PAM_IGNORE;
     }
-    
+
     if (password_old == NULL)
     {
         fscrypt_utils_log(LOG_ERR, "pam_sm_chauthtok failed to get old password\n");
