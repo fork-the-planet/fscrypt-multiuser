@@ -655,7 +655,7 @@ enum fscrypt_utils_status_t wrap_fscrypt_key(struct user_key_data_t *known_user,
             data_buffer = read_stored_data(cryptdata_path);
             if (data_buffer != NULL)
             {
-                entry_buffer = locate_matching_user(data_buffer, known_user);
+                entry_buffer = locate_matching_user(data_buffer, new_user);
             }
             break;
         case KEY_MODE_APPEND_USER:
