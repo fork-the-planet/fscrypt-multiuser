@@ -351,11 +351,18 @@ enum fscrypt_utils_status_t lock_unlock_data_file(const char *datapath, int lock
 {
     ENTER_FUNCTION();
 
+    enum fscrypt_utils_status_t result = FSCRYPT_UTILS_STATUS_ERROR;
+
     const char LOCK_FILE_SUFFIX[] = ".lock";
     size_t lock_path_length = strlen(datapath) + sizeof(LOCK_FILE_SUFFIX) + 1;
     char *lock_path = calloc(lock_path_length, 1);
-    strncat(lock_path, datapath, lock_path_length - 1);
-    strncat(lock_path, LOCK_FILE_SUFFIX, lock_path_length - strlen(lock_path) - 1);
+    if (NULL == lock_path)
+    {
+        fscrypt_utils_log(LOG_ERR, "Failed to allocate lock path string");
+        EXIT_FUNCTION();
+        return result;
+    }
+    snprintf(lock_path, lock_path_length - 1, "%s%s", datapath, LOCK_FILE_SUFFIX);
     fscrypt_utils_log(LOG_INFO, "%s lockfile %s\n", (lock ? "Creating" : "Removing"), lock_path);
 
     int MAX_RETIRES = 10;
@@ -365,7 +372,6 @@ enum fscrypt_utils_status_t lock_unlock_data_file(const char *datapath, int lock
         retries = MAX_RETIRES;
     }
 
-    enum fscrypt_utils_status_t result = FSCRYPT_UTILS_STATUS_ERROR;
     do
     {
         if (retries != MAX_RETIRES && lock)
