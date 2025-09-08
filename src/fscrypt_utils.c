@@ -205,7 +205,7 @@ struct fscrypt_util_config_t *fscrypt_utils_load_config(void)
 
     // Allocate config structure and set defaults.
     // Use calloc so no need to specify default fields which would be 0 or NULL.
-    g_config = (struct fscrypt_util_config_t*)calloc(sizeof(struct fscrypt_util_config_t), 1);
+    g_config = (struct fscrypt_util_config_t*)calloc(1, sizeof(struct fscrypt_util_config_t));
 #ifdef DEBUG_BUILD
     g_config->loglevel = LOG_INFO;
 #else
@@ -629,7 +629,7 @@ enum fscrypt_utils_status_t wrap_fscrypt_key(struct user_key_data_t *known_user,
         }
     }
 
-    struct crypto_context_t *context = (struct crypto_context_t*)calloc(sizeof(struct crypto_context_t), 1);
+    struct crypto_context_t *context = (struct crypto_context_t*)calloc(1, sizeof(struct crypto_context_t));
     fscrypt_utils_generate_random_key(context->iv, sizeof(context->iv));
     memcpy(context->unlock_key, new_user->user_kek, FSCRYPT_USER_KEK_BYTES);
 
@@ -837,7 +837,7 @@ size_t get_fscrypt_key(uint8_t fscrypt_key_out[FSCRYPT_KEY_BYTES], struct user_k
         EXIT_FUNCTION(); return 0;
     }
 
-    struct crypto_context_t *context = (struct crypto_context_t*)calloc(sizeof(struct crypto_context_t), 1);
+    struct crypto_context_t *context = (struct crypto_context_t*)calloc(1, sizeof(struct crypto_context_t));
     memcpy(context->unlock_key, user_data->user_kek, FSCRYPT_USER_KEK_BYTES);
     memcpy(context->iv, stored_data->iv, FSCRYPT_USER_KEK_BYTES);
     size_t outsize = wrap_unwrap_key(context, fscrypt_key_out, stored_data->wrapped_key, stored_data->wrapped_keylength, 0);
