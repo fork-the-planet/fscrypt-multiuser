@@ -358,7 +358,7 @@ enum fscrypt_utils_status_t lock_unlock_data_file(const char *datapath, int lock
     char *lock_path = calloc(lock_path_length, 1);
     if (NULL == lock_path)
     {
-        fscrypt_utils_log(LOG_INFO, "Failed to allocate lock path string");
+        fscrypt_utils_log(LOG_ERR, "Failed to allocate lock path string");
         EXIT_FUNCTION();
         return result;
     }
